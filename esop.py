@@ -8,8 +8,8 @@ from PyQt6.QtCore import Qt, QDate
 class StartupCalculator(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Kalkulator (Netto/Brutto + Dilution)")
-        self.resize(550, 800)
+        self.setWindowTitle("Kalkulator (Netto/Brutto + Multi-Dilution)")
+        self.resize(550, 850)
         
         main_layout = QVBoxLayout()
         self.setLayout(main_layout)
@@ -25,33 +25,32 @@ class StartupCalculator(QWidget):
 
         self.pre_seed_input = QDoubleSpinBox()
         self.pre_seed_input.setRange(0, 10_000_000_000)
-        self.pre_seed_input.setValue(2_000_000)
+        self.pre_seed_input.setValue(20_000_000)
         self.pre_seed_input.setSuffix(" €")
         self.pre_seed_input.setGroupSeparatorShown(True)
-        finance_layout.addRow("Wycena Pre-Seed:", self.pre_seed_input)
+        finance_layout.addRow("Wycena Pre-Seed (Post-Money):", self.pre_seed_input)
 
         self.series_a_input = QDoubleSpinBox()
         self.series_a_input.setRange(0, 10_000_000_000)
-        self.series_a_input.setValue(10_000_000)
+        self.series_a_input.setValue(200_000_000)
         self.series_a_input.setSuffix(" €")
         self.series_a_input.setGroupSeparatorShown(True)
-        finance_layout.addRow("Wycena Series A:", self.series_a_input)
+        finance_layout.addRow("Wycena Series A (Post-Money):", self.series_a_input)
 
         self.valuation_choice = QComboBox()
         self.valuation_choice.addItems(["Użyj wyceny Pre-Seed", "Użyj wyceny Series A"])
         self.valuation_choice.setCurrentIndex(1)
-        finance_layout.addRow("Baza obliczeń:", self.valuation_choice)
+        finance_layout.addRow("Baza obliczeń (Wartość firmy):", self.valuation_choice)
 
         finance_group.setLayout(finance_layout)
         main_layout.addWidget(finance_group)
-
 
         work_group = QGroupBox("2. Twoje Udziały i Praca")
         work_layout = QFormLayout()
 
         self.shares_input = QDoubleSpinBox()
         self.shares_input.setRange(0, 100)
-        self.shares_input.setValue(0.5)
+        self.shares_input.setValue(0.15)
         self.shares_input.setSuffix(" %")
         work_layout.addRow("Posiadane udziały (Start):", self.shares_input)
 
@@ -69,7 +68,6 @@ class StartupCalculator(QWidget):
         work_group.setLayout(work_layout)
         main_layout.addWidget(work_group)
 
-    
         tax_group = QGroupBox("3. Opcje Podatkowe")
         tax_layout = QFormLayout()
 
@@ -128,25 +126,32 @@ class StartupCalculator(QWidget):
         time_group.setLayout(time_layout)
         main_layout.addWidget(time_group)
 
-        dilution_group = QGroupBox("5. Symulacja Rozwodnienia (Dilution)")
+        dilution_group = QGroupBox("5. Symulacja Rozwodnienia (Inwestorzy)")
         dilution_layout = QFormLayout()
         
-        self.dilution_enabled = QCheckBox("Uwzględnij rundę inwestycyjną (rozwodnienie)")
-        self.dilution_enabled.setChecked(False)
-        self.dilution_enabled.toggled.connect(self.toggle_dilution_inputs)
-        dilution_layout.addRow(self.dilution_enabled)
+        self.dilution_seed_cb = QCheckBox("Runda Pre-Seed / Seed")
+        self.dilution_seed_cb.toggled.connect(self.toggle_dilution_inputs)
+        dilution_layout.addRow(self.dilution_seed_cb)
 
-        self.investment_amount_input = QDoubleSpinBox()
-        self.investment_amount_input.setRange(0, 10_000_000_000)
-        self.investment_amount_input.setValue(2_000_000)
-        self.investment_amount_input.setSuffix(" €")
-        self.investment_amount_input.setGroupSeparatorShown(True)
-        self.investment_amount_input.setEnabled(False)
-        dilution_layout.addRow("Kwota Inwestycji (Nowe Środki):", self.investment_amount_input)
-        
-        dilution_note = QLabel("Wzór: Rozwodnienie = Inwestycja / Wycena Post-Money")
-        dilution_note.setStyleSheet("color: gray; font-size: 10px; font-style: italic;")
-        dilution_layout.addRow(dilution_note)
+        self.seed_invest_input = QDoubleSpinBox()
+        self.seed_invest_input.setRange(0, 10_000_000_000)
+        self.seed_invest_input.setValue(3_000_000)
+        self.seed_invest_input.setSuffix(" €")
+        self.seed_invest_input.setGroupSeparatorShown(True)
+        self.seed_invest_input.setEnabled(False)
+        dilution_layout.addRow("   Kwota Inwestycji Seed:", self.seed_invest_input)
+
+        self.dilution_series_a_cb = QCheckBox("Runda Series A")
+        self.dilution_series_a_cb.toggled.connect(self.toggle_dilution_inputs)
+        dilution_layout.addRow(self.dilution_series_a_cb)
+
+        self.series_a_invest_input = QDoubleSpinBox()
+        self.series_a_invest_input.setRange(0, 10_000_000_000)
+        self.series_a_invest_input.setValue(2_000_000)
+        self.series_a_invest_input.setSuffix(" €")
+        self.series_a_invest_input.setGroupSeparatorShown(True)
+        self.series_a_invest_input.setEnabled(False)
+        dilution_layout.addRow("   Kwota Inwestycji Serii A:", self.series_a_invest_input)
 
         dilution_group.setLayout(dilution_layout)
         main_layout.addWidget(dilution_group)
@@ -171,8 +176,8 @@ class StartupCalculator(QWidget):
         self.calc_button.setText("Oblicz Wynik Netto" if state else "Oblicz Wynik Brutto")
 
     def toggle_dilution_inputs(self):
-        state = self.dilution_enabled.isChecked()
-        self.investment_amount_input.setEnabled(state)
+        self.seed_invest_input.setEnabled(self.dilution_seed_cb.isChecked())
+        self.series_a_invest_input.setEnabled(self.dilution_series_a_cb.isChecked())
 
     def update_salary_tax_rate(self):
         idx = self.salary_tax_combo.currentIndex()
@@ -188,35 +193,46 @@ class StartupCalculator(QWidget):
 
     def calculate_results(self):
         eur_rate = self.eur_rate_input.value()
+        pre_seed_val = self.pre_seed_input.value()
+        series_a_val = self.series_a_input.value()
         
         if self.valuation_choice.currentIndex() == 0:
-            valuation_eur = self.pre_seed_input.value()
+            valuation_at_exit = pre_seed_val
             val_name = "Pre-Seed"
         else:
-            valuation_eur = self.series_a_input.value()
+            valuation_at_exit = series_a_val
             val_name = "Series A"
 
         initial_share_percent = self.shares_input.value()
-        
+        current_share_percent = initial_share_percent
         dilution_info_html = ""
-        effective_share_percent = initial_share_percent
         
-        if self.dilution_enabled.isChecked():
-            investment_eur = self.investment_amount_input.value()
-            
-            if investment_eur >= valuation_eur:
-                QMessageBox.warning(self, "Błąd", "Kwota inwestycji nie może być większa niż wycena firmy (Post-Money)!")
+        dilution_steps = []
+
+        if self.dilution_seed_cb.isChecked():
+            inv = self.seed_invest_input.value()
+            if inv >= pre_seed_val:
+                QMessageBox.warning(self, "Błąd", "Inwestycja Seed nie może być większa niż wycena Pre-Seed!")
                 return
-            
-            dilution_ratio = investment_eur / valuation_eur
-            dilution_percent = dilution_ratio * 100.0
-            
-            effective_share_percent = initial_share_percent * (1 - dilution_ratio)
-            
+            ratio = inv / pre_seed_val
+            current_share_percent = current_share_percent * (1 - ratio)
+            dilution_steps.append(f"Seed (-{ratio*100:.1f}%)")
+
+        if self.dilution_series_a_cb.isChecked():
+            inv = self.series_a_invest_input.value()
+            if inv >= series_a_val:
+                QMessageBox.warning(self, "Błąd", "Inwestycja Series A nie może być większa niż wycena Series A!")
+                return
+            ratio = inv / series_a_val
+            current_share_percent = current_share_percent * (1 - ratio)
+            dilution_steps.append(f"Seria A (-{ratio*100:.1f}%)")
+
+        if dilution_steps:
+            dilution_str = " -> ".join(dilution_steps)
             dilution_info_html = (
                 f"<br><span style='font-size:11px; color:#e67e22'>"
-                f"⚠ Rozwodnienie: -{dilution_percent:.1f}% (Inwestycja: {investment_eur:,.0f} €)<br>"
-                f"Efektywny udział: <b>{initial_share_percent}% &rarr; {effective_share_percent:.4f}%</b>"
+                f"Rozwodnienie: {dilution_str}<br>"
+                f"Twoje udziały: <b>{initial_share_percent}% &rarr; {current_share_percent:.4f}%</b>"
                 f"</span>"
             )
 
@@ -236,7 +252,7 @@ class StartupCalculator(QWidget):
         
         salary_gross = months_to_exit * avg_hours * hourly_wage
         
-        shares_gross_pln = (valuation_eur * (effective_share_percent / 100.0)) * eur_rate
+        shares_gross_pln = (valuation_at_exit * (current_share_percent / 100.0)) * eur_rate
         total_gross = salary_gross + shares_gross_pln
 
         if self.tax_enabled.isChecked():
@@ -258,7 +274,7 @@ class StartupCalculator(QWidget):
 
         res_html = (
             f"<h3 style='color:{color_main}'>Wynik Symulacji: {title_type}</h3>"
-            f"Wycena: {val_name} | Czas: {months_to_exit:.1f} msc<hr>"
+            f"Exit: {val_name} | Czas: {months_to_exit:.1f} msc<hr>"
             
             f"<b>1. Pensja:</b> <span style='font-size:14px'>{salary_net:,.2f} PLN</span> "
             f"<span style='color:gray; font-size:10px'>(Brutto: {salary_gross:,.0f})</span><br>"
