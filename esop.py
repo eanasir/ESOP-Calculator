@@ -8,8 +8,8 @@ from PyQt6.QtCore import Qt, QDate
 class StartupCalculator(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Kalkulator Startup (Netto/Brutto)")
-        self.resize(550, 700)
+        self.setWindowTitle("Kalkulator (Netto/Brutto + Dilution)")
+        self.resize(550, 800)
         
         main_layout = QVBoxLayout()
         self.setLayout(main_layout)
@@ -53,7 +53,7 @@ class StartupCalculator(QWidget):
         self.shares_input.setRange(0, 100)
         self.shares_input.setValue(0.5)
         self.shares_input.setSuffix(" %")
-        work_layout.addRow("Posiadane udziały:", self.shares_input)
+        work_layout.addRow("Posiadane udziały (Start):", self.shares_input)
 
         self.hourly_wage_input = QDoubleSpinBox()
         self.hourly_wage_input.setRange(0, 10000)
@@ -72,7 +72,6 @@ class StartupCalculator(QWidget):
     
         tax_group = QGroupBox("3. Opcje Podatkowe")
         tax_layout = QFormLayout()
-
 
         self.tax_enabled = QCheckBox("Uwzględnij podatki w wynikach")
         self.tax_enabled.setChecked(True)
@@ -99,7 +98,6 @@ class StartupCalculator(QWidget):
         tax_row_salary.addWidget(self.salary_tax_rate)
         tax_layout.addRow("Podatek - Praca:", tax_row_salary)
 
-  
         self.shares_tax_combo = QComboBox()
         self.shares_tax_combo.addItems(["Brak (0%)", "Podatek Belki (19%)"])
         self.shares_tax_combo.setCurrentIndex(1)
@@ -130,6 +128,29 @@ class StartupCalculator(QWidget):
         time_group.setLayout(time_layout)
         main_layout.addWidget(time_group)
 
+        dilution_group = QGroupBox("5. Symulacja Rozwodnienia (Dilution)")
+        dilution_layout = QFormLayout()
+        
+        self.dilution_enabled = QCheckBox("Uwzględnij rundę inwestycyjną (rozwodnienie)")
+        self.dilution_enabled.setChecked(False)
+        self.dilution_enabled.toggled.connect(self.toggle_dilution_inputs)
+        dilution_layout.addRow(self.dilution_enabled)
+
+        self.investment_amount_input = QDoubleSpinBox()
+        self.investment_amount_input.setRange(0, 10_000_000_000)
+        self.investment_amount_input.setValue(2_000_000)
+        self.investment_amount_input.setSuffix(" €")
+        self.investment_amount_input.setGroupSeparatorShown(True)
+        self.investment_amount_input.setEnabled(False)
+        dilution_layout.addRow("Kwota Inwestycji (Nowe Środki):", self.investment_amount_input)
+        
+        dilution_note = QLabel("Wzór: Rozwodnienie = Inwestycja / Wycena Post-Money")
+        dilution_note.setStyleSheet("color: gray; font-size: 10px; font-style: italic;")
+        dilution_layout.addRow(dilution_note)
+
+        dilution_group.setLayout(dilution_layout)
+        main_layout.addWidget(dilution_group)
+
         self.calc_button = QPushButton("Oblicz Wynik Netto")
         self.calc_button.setStyleSheet("background-color: #27ae60; color: white; font-weight: bold; padding: 10px; font-size: 14px;")
         self.calc_button.clicked.connect(self.calculate_results)
@@ -148,6 +169,10 @@ class StartupCalculator(QWidget):
         self.shares_tax_combo.setEnabled(state)
         self.shares_tax_rate.setEnabled(state)
         self.calc_button.setText("Oblicz Wynik Netto" if state else "Oblicz Wynik Brutto")
+
+    def toggle_dilution_inputs(self):
+        state = self.dilution_enabled.isChecked()
+        self.investment_amount_input.setEnabled(state)
 
     def update_salary_tax_rate(self):
         idx = self.salary_tax_combo.currentIndex()
@@ -171,7 +196,30 @@ class StartupCalculator(QWidget):
             valuation_eur = self.series_a_input.value()
             val_name = "Series A"
 
-        share_percent = self.shares_input.value()
+        initial_share_percent = self.shares_input.value()
+        
+        dilution_info_html = ""
+        effective_share_percent = initial_share_percent
+        
+        if self.dilution_enabled.isChecked():
+            investment_eur = self.investment_amount_input.value()
+            
+            if investment_eur >= valuation_eur:
+                QMessageBox.warning(self, "Błąd", "Kwota inwestycji nie może być większa niż wycena firmy (Post-Money)!")
+                return
+            
+            dilution_ratio = investment_eur / valuation_eur
+            dilution_percent = dilution_ratio * 100.0
+            
+            effective_share_percent = initial_share_percent * (1 - dilution_ratio)
+            
+            dilution_info_html = (
+                f"<br><span style='font-size:11px; color:#e67e22'>"
+                f"⚠ Rozwodnienie: -{dilution_percent:.1f}% (Inwestycja: {investment_eur:,.0f} €)<br>"
+                f"Efektywny udział: <b>{initial_share_percent}% &rarr; {effective_share_percent:.4f}%</b>"
+                f"</span>"
+            )
+
         hourly_wage = self.hourly_wage_input.value()
         avg_hours = self.hours_month_input.value()
         
@@ -187,7 +235,8 @@ class StartupCalculator(QWidget):
         months_to_exit = delta_days / 30.44
         
         salary_gross = months_to_exit * avg_hours * hourly_wage
-        shares_gross_pln = (valuation_eur * (share_percent / 100.0)) * eur_rate
+        
+        shares_gross_pln = (valuation_eur * (effective_share_percent / 100.0)) * eur_rate
         total_gross = salary_gross + shares_gross_pln
 
         if self.tax_enabled.isChecked():
@@ -215,7 +264,9 @@ class StartupCalculator(QWidget):
             f"<span style='color:gray; font-size:10px'>(Brutto: {salary_gross:,.0f})</span><br>"
             
             f"<b>2. Udziały:</b> <span style='font-size:14px'>{shares_net:,.2f} PLN</span> "
-            f"<span style='color:gray; font-size:10px'>(Brutto: {shares_gross_pln:,.0f})</span><br><br>"
+            f"<span style='color:gray; font-size:10px'>(Brutto: {shares_gross_pln:,.0f})</span>"
+            f"{dilution_info_html}"
+            f"<br><br>"
             
             f"<div style='background-color:#f0f0f0; padding:10px; border-radius:5px;'>"
             f"<span style='font-size:16px; font-weight:bold; color:{color_main}'>"
